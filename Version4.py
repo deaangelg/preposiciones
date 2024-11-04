@@ -1,7 +1,8 @@
-import matplotlib.pyplot as plt 
+# -*- coding: utf-8 -*-
+import matplotlib.pyplot as plt
 import networkx as nx
-import tkinter as tk 
-from tkinter import ttk
+import tkinter as tk
+from tkinter import ttk, filedialog
 import string
 import itertools
 
@@ -11,6 +12,8 @@ root.title("Frases")
 root.geometry("1000x500")
 
 # Frames para organizar los elementos
+frame_top = tk.Frame(root)
+frame_top.pack(side=tk.TOP, padx=10, pady=10, fill=tk.X)
 frame_left = tk.Frame(root)
 frame_left.pack(side=tk.LEFT, padx=10, pady=10)
 frame_right = tk.Frame(root)
@@ -25,7 +28,7 @@ disyuncion = [" o ", " ó ", " Ó ", " O ", " o,", ", o,"]
 conjuncion = [" y ", " Y ", " Y,", ", Y,", ", y ", " y, ", ", y, "]
 negacion_palabras = [" no ", " No ", " NO "]
 frases_completas = {}
-valores_atomicos = {}  # Para almacenar valores de verdad de las subfrases
+valores_asignados = {}
 
 # Configuración de estilo para la tabla
 style = ttk.Style()
@@ -34,8 +37,8 @@ style.configure("Treeview", rowheight=30, font=("Arial", 10))
 style.map("Treeview", background=[("selected", "#f0f0ff")])
 
 # Tabla en el frame derecho
-tabla = ttk.Treeview(frame_right, columns=("Formula", "Frase Completa", "Subfrase", "Variable", "Valor"), show="headings")
-for col, width in zip(("Formula", "Frase Completa", "Subfrase", "Variable", "Valor"), (200, 300, 200, 80, 80)):
+tabla = ttk.Treeview(frame_right, columns=("Formula", "Frase Completa", "Subfrase", "Variable"), show="headings")
+for col, width in zip(("Formula", "Frase Completa", "Subfrase", "Variable"), (200, 300, 200, 80)):
     tabla.heading(col, text=col)
     tabla.column(col, anchor="w", width=width)
 tabla.pack(fill=tk.BOTH, expand=True)
@@ -50,7 +53,6 @@ def agregar_frase():
 def dividir_frase_multiple(frase):
     subfrases, tipos, negaciones = [], [], []
     while any(con in frase for con in disyuncion + conjuncion):
-        es_negacion = any(neg in frase for neg in negacion_palabras)
         index_disyuncion = min((frase.find(con) for con in disyuncion if con in frase), default=len(frase))
         index_conjuncion = min((frase.find(con) for con in conjuncion if con in frase), default=len(frase))
 
@@ -63,18 +65,17 @@ def dividir_frase_multiple(frase):
             subfrase, frase = map(str.strip, frase.split(conector, 1))
             tipos.append("Conjunción")
 
-        if es_negacion:
-            subfrase = subfrase.replace(" no", "").strip()  # Eliminamos la negación de la subfrase
+        # Manejo de negaciones
+        if "no" in subfrase:
+            subfrase = subfrase.replace("no", "").strip()
             negaciones.append(True)
         else:
             negaciones.append(False)
         subfrases.append(subfrase)
 
-    # Añade la última parte como subfrase
     if frase.strip():
-        es_negacion = any(neg in frase for neg in negacion_palabras)
-        if es_negacion:
-            frase = frase.replace(" no", "").strip()
+        if "no" in frase:
+            frase = frase.replace("no", "").strip()
             negaciones.append(True)
         else:
             negaciones.append(False)
@@ -93,18 +94,16 @@ def construir_formula_logica(subfrases, tipos, negaciones):
         if i == 0:
             formula.append(subformula)
         else:
-            # Añade paréntesis a las operaciones anteriores
             if tipos[i-1] == "Conjunción":
                 formula.append(f"({formula.pop()} ∧ {subformula})")
             elif tipos[i-1] == "Disyunción":
                 formula.append(f"({formula.pop()} ∨ {subformula})")
 
-    # Formar la expresión final
     return " ".join(formula)
 
 # Procesa y muestra cada frase en la tabla
 def guardar_frases():
-    global current_letter_index, formula_logica, subfrases
+    global current_letter_index
     for entrada in text_entries:
         texto = entrada.get()
         if texto:
@@ -118,56 +117,168 @@ def guardar_frases():
             formula_logica = construir_formula_logica(subfrases, tipos, negaciones)
             frases_completas[formula_logica] = subfrases
 
-            tabla.insert("", "end", values=(formula_logica, texto, "", "", ""))
+            tabla.insert("", "end", values=(formula_logica, texto, "", ""))
 
             for i, subfrase in enumerate(subfrases):
                 tipo = tipos[i] if i < len(tipos) else ""
-                tabla.insert("", "end", values=(tipo, "", subfrase, subfrases_guardadas[subfrase], ""))
+                variable = subfrases_guardadas[subfrase]
+                if negaciones[i]:
+                    variable = f"¬{variable}"
+                tabla.insert("", "end", values=(tipo, "", subfrase, variable))
 
-# Función para asignar valores a los átomos en una sola ventana
-def asignar_valores_verdad():
-    ventana_asignar = tk.Toplevel(root)
-    ventana_asignar.title("Asignar valores a átomos")
+# Cargar frases desde un archivo TXT
+def cargar_frases_txt():
+    global current_letter_index
+    archivo = filedialog.askopenfilename(filetypes=[("Text Files", "*.txt")])
+    if archivo:
+        with open(archivo, 'r', encoding='utf-8') as f:
+            frases = f.readlines()
+            for texto in frases:
+                texto = texto.strip()
+                if texto:
+                    subfrases, tipos, negaciones = dividir_frase_multiple(texto)
+                    for subfrase in subfrases:
+                        if subfrase not in subfrases_guardadas:
+                            if current_letter_index < len(alphabet):
+                                subfrases_guardadas[subfrase] = alphabet[current_letter_index]
+                                current_letter_index += 1
 
-    tk.Label(ventana_asignar, text="Asigna valores a los átomos:").pack(pady=10)
+                    formula_logica = construir_formula_logica(subfrases, tipos, negaciones)
+                    frases_completas[formula_logica] = subfrases
+                    tabla.insert("", "end", values=(formula_logica, texto, "", ""))
 
-    atomos_var = {}
-    for subfrase, variable in subfrases_guardadas.items():
-        valor = tk.StringVar(value="1")  # Valor por defecto a "verdadero"
-        atomos_var[variable] = valor
-
-        tk.Label(ventana_asignar, text=subfrase).pack(anchor=tk.W)
-        tk.Radiobutton(ventana_asignar, text="Verdadero", variable=valor, value="1").pack(anchor=tk.W)
-        tk.Radiobutton(ventana_asignar, text="Falso", variable=valor, value="0").pack(anchor=tk.W)
-
+# Asigna valores de verdadero o falso a las subfrases
+def asignar_valores():
     def guardar_valores():
-        for variable, valor in atomos_var.items():
-            valores_atomicos[variable] = valor.get()
-        ventana_asignar.destroy()
-        actualizar_tabla()
+        for subfrase in subfrases:
+            valor = var_dict[subfrase].get()
+            valores_asignados[subfrase] = valor
+            
+        mostrar_valores_asignados()
+        guardar_valores_txt()
+        ventana.destroy()
 
-    tk.Button(ventana_asignar, text="Guardar", command=guardar_valores).pack(pady=10)
-    ventana_asignar.transient(root)  # Hacer la ventana secundaria dependiente de la principal
-    ventana_asignar.grab_set()  # Bloquear interacción con la ventana principal
+    def guardar_valores_txt():
+        archivo = filedialog.asksaveasfilename(defaultextension=".txt", filetypes=[("Text Files", "*.txt")])
+        if archivo:
+            with open(archivo, 'w', encoding='utf-8') as f:
+                for subfrase, valor in valores_asignados.items():
+                    f.write(f"{subfrase}: {valor}\n")
 
-# Función para actualizar la tabla con los valores de verdad
-def actualizar_tabla():
+    ventana = tk.Toplevel(root)
+    ventana.title("Asignar Valores")
+    ventana.geometry("300x200")
+
+    subfrases = list(subfrases_guardadas.keys())
+    var_dict = {}
+
+    for subfrase in subfrases:
+        var_dict[subfrase] = tk.StringVar(value='True')
+        tk.Radiobutton(ventana, text=f"{subfrases_guardadas[subfrase]}: Verdadero", variable=var_dict[subfrase], value='True').pack(anchor=tk.W)
+        tk.Radiobutton(ventana, text=f"{subfrases_guardadas[subfrase]}: Falso", variable=var_dict[subfrase], value='False').pack(anchor=tk.W)
+
+    tk.Button(ventana, text="Guardar Valores", command=guardar_valores).pack(pady=10)
+
+def mostrar_valores_asignados():
+    ventana_valores = tk.Toplevel(root)
+    ventana_valores.title("Valores Asignados")
+    ventana_valores.geometry("400x300")
+
+    tabla_valores = ttk.Treeview(ventana_valores, columns=("Variable", "Valor"), show="headings")
+    for col, width in zip(("Variable", "Valor"), (200, 150)):
+        tabla_valores.heading(col, text=col)
+        tabla_valores.column(col, anchor="w", width=width)
+    tabla_valores.pack(fill=tk.BOTH, expand=True)
+
     for subfrase, variable in subfrases_guardadas.items():
-        valor = valores_atomicos.get(variable, "")
-        # Actualizar la tabla para mostrar el valor asignado
-        for item in tabla.get_children():
-            if tabla.item(item)['values'][3] == variable:
-                tabla.item(item, values=(tabla.item(item)['values'][0], 
-                                          tabla.item(item)['values'][1], 
-                                          tabla.item(item)['values'][2], 
-                                          tabla.item(item)['values'][3], 
-                                          valor))
+        valor = valores_asignados.get(subfrase, "No asignado")
+        tabla_valores.insert("", "end", values=(variable, valor))
 
-# Botones para la interfaz
-tk.Button(frame_left, text="Agregar Frase", command=agregar_frase).pack(pady=10)
-tk.Button(frame_left, text="Guardar Frases", command=guardar_frases).pack(pady=10)
-tk.Button(frame_left, text="Asignar Valores a Átomos", command=asignar_valores_verdad).pack(pady=10)
-tk.Button(frame_left, text="Mostrar Tablas de Verdad", command=lambda: mostrar_tabla_verdad(formula_logica, subfrases)).pack(pady=10)
-tk.Button(frame_left, text="Dibujar Árbol de Estados", command=lambda: dibujar_arbol_estados(formula_logica, subfrases)).pack(pady=10)
+# Evalúa la fórmula lógica
+def evaluar_formula(formula, valores):
+    for var, val in valores.items():
+        formula = formula.replace(var, str(val))
+    formula = formula.replace("¬", " not ").replace("∧", " and ").replace("∨", " or ")
+    try:
+        return int(eval(formula))
+    except:
+        return "Error"
+
+# Dibuja el árbol de estados en forma de pirámide
+def dibujar_arbol_estados(formula):
+    G = nx.DiGraph()
+
+    def agregar_nodos(nodo_padre, variables, nivel):
+        if not variables:
+            return
+        
+        var_actual = variables[0]
+        operacion = f"{formula} (Nivel {nivel})"
+        if nivel == 0:
+            G.add_node(operacion)
+            G.add_edge(nodo_padre, operacion)
+            nodo_padre = operacion
+        
+        for estado in [0, 1]:
+            estado_str = f"{var_actual} = {'True' if estado else 'False'}"
+            G.add_node(estado_str)
+            G.add_edge(nodo_padre, estado_str)
+            
+            agregar_nodos(estado_str, variables[1:], nivel + 1)
+
+    variables = list(subfrases_guardadas.keys())
+    agregar_nodos("", variables, 0)
+
+    pos = nx.spring_layout(G)
+    labels = {nodo: nodo for nodo in G.nodes}
+    plt.figure(figsize=(12, 8))
+    nx.draw(G, pos, with_labels=True, labels=labels, arrows=True, node_size=2000, node_color='lightblue', font_size=10, font_weight='bold', edge_color='gray')
+    plt.title("Árbol de Estados de la Fórmula")
+    plt.show()
+
+# Generar botones para los árboles de estados
+def generar_botones_arbol_estados():
+    for formula in frases_completas.keys():
+        tk.Button(frame_left, text=f"Árbol de Estados para {formula}",
+                  command=lambda f=formula: dibujar_arbol_estados(f)).pack(pady=5)
+
+# Generar tablas de verdad
+def generar_tabla_verdad():
+    for formula, subfrases in frases_completas.items():
+        tk.Button(frame_left, text=f"Tabla de Verdad para {formula}",
+                  command=lambda f=formula, s=subfrases: mostrar_tabla_verdad(f, s)).pack(pady=5)
+
+def mostrar_tabla_verdad(formula, subfrases):
+    ventana_tabla = tk.Toplevel(root)
+    ventana_tabla.title("Tabla de Verdad")
+    ventana_tabla.geometry("400x400")
+
+    tabla_verdad = ttk.Treeview(ventana_tabla, columns=("Variables", "Resultado"), show="headings")
+    tabla_verdad.heading("Variables", text="Variables")
+    tabla_verdad.heading("Resultado", text="Resultado")
+    tabla_verdad.pack(fill=tk.BOTH, expand=True)
+
+    variables = [subfrases_guardadas[subfrase] for subfrase in subfrases]
+    combinaciones = list(itertools.product([0, 1], repeat=len(variables)))
+
+    for combinacion in combinaciones:
+        valores = dict(zip(variables, combinacion))
+        resultado = evaluar_formula(formula, valores)
+        tabla_verdad.insert("", "end", values=(valores, resultado))
+
+# Botones de la interfaz gráfica en la parte superior
+boton_textos = [
+    ("Agregar frase", agregar_frase), 
+    ("Cargar TXT", cargar_frases_txt), 
+    ("Guardar", guardar_frases),
+    ("Borrar todo", lambda: tabla.delete(*tabla.get_children())),
+    ("Asignar Valores", asignar_valores),
+    ("Generar Árboles de Estados", generar_botones_arbol_estados),
+    ("Generar Tablas de Verdad", generar_tabla_verdad)
+]
+
+for text, command in boton_textos:
+    btn = tk.Button(frame_top, text=text, command=command)
+    btn.pack(side=tk.LEFT, padx=5)
 
 root.mainloop()
