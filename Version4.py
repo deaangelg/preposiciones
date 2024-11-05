@@ -25,7 +25,7 @@ alphabet = list(string.ascii_uppercase)
 current_letter_index = 0
 subfrases_guardadas = {}
 disyuncion = [" o ", " ó ", " Ó ", " O ", " o,", ", o,"]
-conjuncion = [" y ", " Y ", " Y,", ", Y,", ", y ", " y, ", ", y, "]
+conjuncion = [" y ", " Y ", " Y,", ", Y,", ", y ", " y, ", ", y,"]
 negacion_palabras = [" no ", " No ", " NO "]
 frases_completas = {}
 valores_asignados = {}
@@ -100,6 +100,25 @@ def construir_formula_logica(subfrases, tipos, negaciones):
                 formula.append(f"({formula.pop()} ∨ {subformula})")
 
     return " ".join(formula)
+
+# Función para generar la fórmula de Horn de las frases guardadas
+def generar_formula_horn_guardadas():
+    ventana_horn_guardadas = tk.Toplevel(root)
+    ventana_horn_guardadas.title("Fórmulas de Horn de Frases Guardadas")
+    ventana_horn_guardadas.geometry("600x600")
+
+    # Crear un cuadro de texto para mostrar las fórmulas
+    text_box = tk.Text(ventana_horn_guardadas, wrap=tk.WORD, width=70, height=25)
+    text_box.pack(padx=10, pady=10)
+
+    # Limpiar el cuadro de texto antes de llenarlo
+    text_box.delete(1.0, tk.END)
+
+    # Recorrer las frases guardadas
+    for formula_logica, subfrases in frases_completas.items():
+        texto = " ".join(subfrases)
+        text_box.insert(tk.END, f"Frase Completa: {texto}\n")
+        text_box.insert(tk.END, f"Fórmula de Horn: {formula_logica}\n\n")
 
 # Procesa y muestra cada frase en la tabla
 def guardar_frases():
@@ -273,6 +292,7 @@ boton_textos = [
     ("Guardar", guardar_frases),
     ("Borrar todo", lambda: tabla.delete(*tabla.get_children())),
     ("Asignar Valores", asignar_valores),
+    ("Generar Fórmulas de Horn", generar_formula_horn_guardadas),
     ("Generar Árboles de Estados", generar_botones_arbol_estados),
     ("Generar Tablas de Verdad", generar_tabla_verdad)
 ]
